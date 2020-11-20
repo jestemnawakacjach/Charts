@@ -41,7 +41,7 @@ class BarChartViewController: DemoBaseViewController {
         self.setup(barLineChartView: chartView)
         
         chartView.delegate = self
-        
+        chartView.drawRoundedBarEnabled = true
         chartView.drawBarShadowEnabled = false
         chartView.drawValueAboveBarEnabled = false
         
