@@ -375,42 +375,15 @@ open class BarChartRenderer: BarLineScatterCandleBubbleRenderer
             guard viewPortHandler.isInBoundsLeft(barRect.origin.x + barRect.size.width) else { continue }
             guard viewPortHandler.isInBoundsRight(barRect.origin.x) else { break }
 
-            if !isSingleColor
+            drawBar(context: context, dataSet: dataSet, index: j, barRect: barRect)
+
+            if drawBorder
             {
-                // Set the color for the currently drawn value. If the index is out of bounds, reuse colors.
-                context.setFillColor(dataSet.color(atIndex: j).cgColor)
+                context.setStrokeColor(borderColor.cgColor)
+                context.setLineWidth(borderWidth)
+                context.stroke(barRect)
             }
 
-            if dataProvider.isDrawRoundedBarEnabled
-            {
-                let cornerRadius = CGSize(width: barRect.width / 2.0, height: barRect.width / 2.0)
-                #if os(OSX)
-                    let bezierPath = NSBezierPath(roundedRect: barRect, xRadius: cornerRadius.width, yRadius: cornerRadius.height)
-                    context.addPath(bezierPath.cgPath)
-                #else
-                    let bezierPath = UIBezierPath(roundedRect: barRect, byRoundingCorners: dataSet.barRoundingCorners, cornerRadii: cornerRadius)
-                    context.addPath(bezierPath.cgPath)
-                #endif
-                context.fillPath()
-
-                if drawBorder
-                {
-                    bezierPath.lineWidth = borderWidth
-                    borderColor.setStroke()
-                    bezierPath.stroke()
-                }
-            }
-            else
-            {
-                context.fill(barRect)
-
-                if drawBorder
-                {
-                    context.setStrokeColor(borderColor.cgColor)
-                    context.setLineWidth(borderWidth)
-                    context.stroke(barRect)
-                }
-            }
 
             // Create and append the corresponding accessibility element to accessibilityOrderedElements
             if let chart = dataProvider as? BarChartView
@@ -426,6 +399,75 @@ open class BarChartRenderer: BarLineScatterCandleBubbleRenderer
 
                 accessibilityOrderedElements[j / stackSize].append(element)
             }
+        }
+    }
+
+    open func drawBar(context: CGContext, dataSet: BarChartDataSetProtocol, index: Int, barRect: CGRect)
+    {
+        context.saveGState()
+        defer { context.restoreGState() }
+        guard let dataProvider = dataProvider else { return }
+
+        if let gradientColor = dataSet.barGradientColor(at: index)
+        {
+            drawGradient(context: context, barRect: barRect, gradientColors: gradientColor, orientation: dataSet.barGradientOrientation, dataSet: dataSet)
+        } else {
+            let fillColor = dataSet.color(atIndex: index).cgColor
+            context.setFillColor(fillColor)
+            if dataProvider.isDrawRoundedBarEnabled
+            {
+                let cornerRadius = CGSize(width: barRect.width / 2.0, height: barRect.width / 2.0)
+                #if os(OSX)
+                    let bezierPath = NSBezierPath(roundedRect: barRect, xRadius: cornerRadius.width, yRadius: cornerRadius.height)
+                    context.addPath(bezierPath.cgPath)
+                #else
+                    let bezierPath = UIBezierPath(roundedRect: barRect, byRoundingCorners: dataSet.barRoundingCorners, cornerRadii: cornerRadius)
+                    context.addPath(bezierPath.cgPath)
+                #endif
+                context.fillPath()
+            }
+        }
+    }
+
+    open func drawGradient(context: CGContext, barRect: CGRect, gradientColors: Array<NSUIColor>, orientation: BarGradientOrientation, dataSet: BarChartDataSetProtocol)
+    {
+        guard let dataProvider = dataProvider else { return }
+
+        let cgColors = gradientColors.map { $0.cgColor } as CFArray
+        let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: cgColors, locations: nil)
+
+        let startPoint: CGPoint
+        let endPoint: CGPoint
+
+        switch orientation
+        {
+        case .vertical:
+            startPoint = CGPoint(x: barRect.midX, y: barRect.maxY)
+            endPoint = CGPoint(x: barRect.midX, y: barRect.minY)
+
+        case .horizontal:
+            startPoint = CGPoint(x: barRect.minX, y: barRect.midY)
+            endPoint = CGPoint(x: barRect.maxX, y: barRect.midY)
+        }
+        
+        if dataProvider.isDrawRoundedBarEnabled
+        {
+            let cornerRadius = CGSize(width: barRect.width / 2.0, height: barRect.width / 2.0)
+            #if os(OSX)
+                let bezierPath = NSBezierPath(roundedRect: barRect, xRadius: cornerRadius.width, yRadius: cornerRadius.height)
+                context.addPath(bezierPath.cgPath)
+            #else
+                let bezierPath = UIBezierPath(roundedRect: barRect, byRoundingCorners: dataSet.barRoundingCorners, cornerRadii: cornerRadius)
+                context.addPath(bezierPath.cgPath)
+            #endif
+            context.clip()
+            context.drawLinearGradient(gradient!, start: startPoint, end: endPoint, options: [])
+        }else {
+            let path = CGPath(rect: barRect, transform: nil)
+
+            context.addPath(path)
+            context.clip()
+            context.drawLinearGradient(gradient!, start: startPoint, end: endPoint, options: [])
         }
     }
 
